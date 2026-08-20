@@ -3,15 +3,17 @@ name: build-and-push
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-xrl.*'
   workflow_dispatch:
     inputs:
       upstream_tag:
         description: 'Upstream jellyfin/jellyfin tag'
-        default: '10.11.5'
+        default: '10.11.11'
+        required: true
       web_tag:
         description: 'xrl/jellyfin-web release tag'
-        default: 'v10.11.5-xrl.1'
+        default: 'v10.11.11-xrl.1'
+        required: true
 
 permissions:
   contents: read
@@ -21,45 +23,97 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Login to ghcr.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute tag
+      - name: Compute release metadata
         id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+          INPUT_WEB_TAG: ${{ inputs.web_tag }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-            echo "build_args=" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            RELEASE_TAG="${GITHUB_REF_NAME#v}"
+            UPSTREAM_TAG="${RELEASE_TAG%%-xrl.*}"
+            WEB_TAG="$GITHUB_REF_NAME"
+            IMAGE_TAGS="ghcr.io/xrl/jellyfin-rpi:${RELEASE_TAG}"$'\n''ghcr.io/xrl/jellyfin-rpi:latest'
           else
-            echo "tag=${{ inputs.upstream_tag }}-manual-$(date +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
-            {
-              echo "build_args<<EOF"
-              echo "UPSTREAM_TAG=${{ inputs.upstream_tag }}"
-              echo "WEB_TAG=${{ inputs.web_tag }}"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
+            UPSTREAM_TAG="$INPUT_UPSTREAM_TAG"
+            WEB_TAG="$INPUT_WEB_TAG"
+            RELEASE_TAG="${UPSTREAM_TAG}-manual-${GITHUB_RUN_ID}"
+            IMAGE_TAGS="ghcr.io/xrl/jellyfin-rpi:${RELEASE_TAG}"
           fi
 
+          if ! [[ "$UPSTREAM_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid upstream tag: $UPSTREAM_TAG" >&2
+            exit 1
+          fi
+          if [[ "$WEB_TAG" != "v${UPSTREAM_TAG}-xrl."* ]]; then
+            echo "Web tag $WEB_TAG does not match upstream $UPSTREAM_TAG" >&2
+            exit 1
+          fi
+
+          {
+            echo 'image_tags<<EOF'
+            printf '%s\n' "$IMAGE_TAGS"
+            echo 'EOF'
+            echo "release_tag=$RELEASE_TAG"
+            echo "upstream_tag=$UPSTREAM_TAG"
+            echo "web_tag=$WEB_TAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve web bundle checksum
+        id: web
+        shell: bash
+        env:
+          WEB_TAG: ${{ steps.meta.outputs.web_tag }}
+        run: |
+          set -euo pipefail
+          CHECKSUM=$(curl --retry 5 --retry-all-errors -fsSL \
+            "https://github.com/xrl/jellyfin-web/releases/download/${WEB_TAG}/jellyfin-web-dist.tar.gz.sha256")
+          read -r WEB_SHA256 FILENAME <<< "$CHECKSUM"
+          if ! [[ "$WEB_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$FILENAME" != "jellyfin-web-dist.tar.gz" ]; then
+            echo "Invalid checksum release asset for $WEB_TAG" >&2
+            exit 1
+          fi
+          echo "sha256=$WEB_SHA256" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
+          pull: true
           push: true
-          tags: |
-            ghcr.io/xrl/jellyfin-rpi:${{ steps.meta.outputs.tag }}
-            ghcr.io/xrl/jellyfin-rpi:latest
-          build-args: ${{ steps.meta.outputs.build_args }}
-          provenance: false
+          tags: ${{ steps.meta.outputs.image_tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/xrl/jellyfin-rpi
+            org.opencontainers.image.version=${{ steps.meta.outputs.release_tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.base.name=docker.io/jellyfin/jellyfin:${{ steps.meta.outputs.upstream_tag }}
+            io.xrl.jellyfin.web-tag=${{ steps.meta.outputs.web_tag }}
+            io.xrl.jellyfin.web-sha256=${{ steps.web.outputs.sha256 }}
+          build-args: |
+            UPSTREAM_TAG=${{ steps.meta.outputs.upstream_tag }}
+            WEB_TAG=${{ steps.meta.outputs.web_tag }}
+            WEB_SHA256=${{ steps.web.outputs.sha256 }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
