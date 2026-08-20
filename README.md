@@ -1,39 +1,45 @@
 # jellyfin-rpi
 
-Custom Jellyfin server image that bakes a patched `jellyfin-web` bundle into the official `jellyfin/jellyfin` server. This is an image remix — not a fork of the Jellyfin server itself.
+A multi-architecture Jellyfin image that replaces the web bundle in the official `jellyfin/jellyfin` server image with the tested LG webOS playback bundle from [`xrl/jellyfin-web`](https://github.com/xrl/jellyfin-web). This is an image remix, not a fork of the Jellyfin server or FFmpeg.
 
-## What's patched
+## Current release
 
-- **MKV progressive playback** enabled by default (`enableMkvProgressive`)
-- **LG WebOS HDR10+ / Dolby Vision** support extended to WebOS C2 and newer (`tizenVersion>=3 || web0s` path)
+`ghcr.io/xrl/jellyfin-rpi:10.11.11-xrl.1` combines:
 
-Patches live in [xrl/jellyfin-web](https://github.com/xrl/jellyfin-web) and are released as `jellyfin-web-dist.tar.gz` tarballs.
+- `jellyfin/jellyfin:10.11.11`
+- `xrl/jellyfin-web:v10.11.11-xrl.1`
 
-## Image reference
+The web release asset is SHA-256 verified during the image build. Images are published for `linux/amd64` and `linux/arm64` with provenance and SBOM attestations.
 
-```
-ghcr.io/xrl/jellyfin-rpi:<tag>
-ghcr.io/xrl/jellyfin-rpi:latest
-```
+## Web playback patches
 
-Example:
+The source and rationale are documented in [`xrl/jellyfin-web/XRL_PATCHES.md`](https://github.com/xrl/jellyfin-web/blob/release-10.11.z-xrl/XRL_PATCHES.md). The current bundle carries:
+
+- conservative DTS detection to prevent silent audio on LG models that cannot decode DTS;
+- broader webOS Dolby Vision/HDR fallback ranges for the LG C2; and
+- fragmented-MP4/CMAF HLS by default on webOS to preserve Dolby Vision and HDR10+ signaling.
+
+The earlier MKV-progressive experiment is not included because it had no runtime effect.
+
+## Release process
+
+1. Port and test the patches on the matching upstream `jellyfin-web` release.
+2. Tag that fork, for example `v10.11.11-xrl.1`. Its release workflow publishes `jellyfin-web-dist.tar.gz` and a SHA-256 file.
+3. Update this repository's Dockerfile defaults to the matching official server tag, web tag, and web asset checksum.
+4. Tag this repository with the same version. Tag builds derive the server and web versions from the tag and publish:
+   - `ghcr.io/xrl/jellyfin-rpi:<version>`
+   - `ghcr.io/xrl/jellyfin-rpi:latest`
+5. Update the explicit image tag in `xrl/rpi-homelab` and deploy through Argo CD only after LG C2 validation.
+
+Manual workflow runs publish a uniquely named image and deliberately do not move `latest`.
+
+## Local build
+
 ```sh
-docker pull ghcr.io/xrl/jellyfin-rpi:10.11.5-xrl.1
+docker buildx build \
+  --platform linux/arm64 \
+  --load \
+  -t jellyfin-rpi:10.11.11-xrl.1 .
 ```
 
-## How to bump
-
-1. Build and tag a new release in [xrl/jellyfin-web](https://github.com/xrl/jellyfin-web) — e.g. `v10.11.5-xrl.2`.
-2. Push a matching tag here:
-   ```sh
-   git tag v10.11.5-xrl.2
-   git push origin v10.11.5-xrl.2
-   ```
-   The tag triggers the `build-and-push` workflow. The leading `v` is stripped so the image tag becomes `10.11.5-xrl.2`.
-
-For a new upstream Jellyfin version, update the `ARG UPSTREAM_TAG` default in the `Dockerfile` and the workflow `default` values, then tag accordingly.
-
-## Upstream sources
-
-- Jellyfin server: [jellyfin/jellyfin](https://github.com/jellyfin/jellyfin) — `jellyfin/jellyfin:<tag>` on Docker Hub
-- Patched web UI: [xrl/jellyfin-web](https://github.com/xrl/jellyfin-web) — releases at `github.com/xrl/jellyfin-web/releases`
+The Dockerfile defaults are sufficient for the current release. Override `UPSTREAM_TAG`, `WEB_TAG`, and `WEB_SHA256` together when testing another combination.
