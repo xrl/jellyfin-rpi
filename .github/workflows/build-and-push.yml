@@ -12,7 +12,7 @@ on:
         required: true
       web_tag:
         description: 'xrl/jellyfin-web release tag'
-        default: 'v10.11.11-xrl.1'
+        default: 'v10.11.11-xrl.2'
         required: true
 
 permissions:
