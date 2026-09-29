@@ -60,7 +60,8 @@ jobs:
             IMAGE_TAGS="ghcr.io/xrl/jellyfin-rpi:${RELEASE_TAG}"
           fi
 
-          if ! [[ "$UPSTREAM_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          # Official upstream tags include 12.1 (not 12.1.0); retain older three-part tags.
+          if ! [[ "$UPSTREAM_TAG" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             echo "Invalid upstream tag: $UPSTREAM_TAG" >&2
             exit 1
           fi
