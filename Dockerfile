@@ -1,18 +1,23 @@
 # syntax=docker/dockerfile:1.7
 
-ARG UPSTREAM_TAG=10.11.11
-ARG WEB_TAG=v10.11.11-xrl.2
-ARG WEB_SHA256=471145a44974ef2149748efb4eccdb8d1946e0c1a950ddf84463e2d156a1150c
+# Official 12.1 multi-platform index, including ARM64 child
+# sha256:690b2dcb8f18f144d1091d728208a36e90cbf84a8811c9275b1e3bd96d52944f.
+ARG UPSTREAM_BASE=docker.io/jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e
+ARG UPSTREAM_TAG=12.1
+ARG WEB_TAG=v12.1-xrl.1
+ARG WEB_SHA256
 
-FROM jellyfin/jellyfin:${UPSTREAM_TAG}
+FROM ${UPSTREAM_BASE}
 
+ARG UPSTREAM_BASE
 ARG UPSTREAM_TAG
 ARG WEB_TAG
 ARG WEB_SHA256
 
 LABEL org.opencontainers.image.source="https://github.com/xrl/jellyfin-rpi" \
       org.opencontainers.image.description="Official Jellyfin server with the XRL webOS playback bundle" \
-      org.opencontainers.image.base.name="docker.io/jellyfin/jellyfin:${UPSTREAM_TAG}" \
+      org.opencontainers.image.base.name="${UPSTREAM_BASE}" \
+      io.xrl.jellyfin.base-arm64-manifest="sha256:690b2dcb8f18f144d1091d728208a36e90cbf84a8811c9275b1e3bd96d52944f" \
       io.xrl.jellyfin.upstream-tag="${UPSTREAM_TAG}" \
       io.xrl.jellyfin.web-tag="${WEB_TAG}" \
       io.xrl.jellyfin.web-sha256="${WEB_SHA256}"
