@@ -8,11 +8,11 @@ on:
     inputs:
       upstream_tag:
         description: 'Upstream jellyfin/jellyfin tag'
-        default: '10.11.11'
+        default: '12.1'
         required: true
       web_tag:
         description: 'xrl/jellyfin-web release tag'
-        default: 'v10.11.11-xrl.2'
+        default: 'v12.1-xrl.1'
         required: true
 
 permissions:
@@ -65,8 +65,10 @@ jobs:
             echo "Invalid upstream tag: $UPSTREAM_TAG" >&2
             exit 1
           fi
-          if [[ "$WEB_TAG" != "v${UPSTREAM_TAG}-xrl."* ]]; then
-            echo "Web tag $WEB_TAG does not match upstream $UPSTREAM_TAG" >&2
+          # This release branch pins the verified official 12.1 index; do not
+          # silently build another version against that base.
+          if [ "$UPSTREAM_TAG" != '12.1' ] || ! [[ "$WEB_TAG" =~ ^v12\.1-xrl\.[0-9]+$ ]]; then
+            echo "This recipe requires official 12.1 and a v12.1-xrl.N web release" >&2
             exit 1
           fi
 
@@ -78,6 +80,18 @@ jobs:
             echo "upstream_tag=$UPSTREAM_TAG"
             echo "web_tag=$WEB_TAG"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Verify pinned official base and ARM64 manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_TAG='jellyfin/jellyfin:12.1'
+          BASE_INDEX='78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e'
+          BASE_ARM64='sha256:690b2dcb8f18f144d1091d728208a36e90cbf84a8811c9275b1e3bd96d52944f'
+          RAW=$(docker buildx imagetools inspect --raw "$BASE_TAG")
+          [ "$(printf '%s' "$RAW" | sha256sum | cut -d' ' -f1)" = "$BASE_INDEX" ]
+          printf '%s' "$RAW" | jq -e --arg digest "$BASE_ARM64" \
+            '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64" and .digest == $digest)] | length == 1' > /dev/null
 
       - name: Resolve web bundle checksum
         id: web
@@ -107,10 +121,12 @@ jobs:
             org.opencontainers.image.source=https://github.com/xrl/jellyfin-rpi
             org.opencontainers.image.version=${{ steps.meta.outputs.release_tag }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.base.name=docker.io/jellyfin/jellyfin:${{ steps.meta.outputs.upstream_tag }}
+            org.opencontainers.image.base.name=docker.io/jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e
+            io.xrl.jellyfin.base-arm64-manifest=sha256:690b2dcb8f18f144d1091d728208a36e90cbf84a8811c9275b1e3bd96d52944f
             io.xrl.jellyfin.web-tag=${{ steps.meta.outputs.web_tag }}
             io.xrl.jellyfin.web-sha256=${{ steps.web.outputs.sha256 }}
           build-args: |
+            UPSTREAM_BASE=docker.io/jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e
             UPSTREAM_TAG=${{ steps.meta.outputs.upstream_tag }}
             WEB_TAG=${{ steps.meta.outputs.web_tag }}
             WEB_SHA256=${{ steps.web.outputs.sha256 }}
