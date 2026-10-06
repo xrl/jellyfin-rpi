@@ -14,6 +14,12 @@ on:
         description: 'xrl/jellyfin-web release tag'
         default: 'v12.1-xrl.1'
         required: true
+      server_sha256:
+        description: 'Reviewed v12.1-rpi.1 Jellyfin.Api.dll release SHA256 (no default until published)'
+        required: true
+      server_provenance_sha256:
+        description: 'Reviewed v12.1-rpi.1 Jellyfin.Api.provenance.json SHA256'
+        required: true
 
 permissions:
   contents: read
@@ -115,6 +121,17 @@ jobs:
           fi
           echo "sha256=$WEB_SHA256" >> "$GITHUB_OUTPUT"
 
+      - name: Require reviewed server release pins
+        env:
+          SERVER_SHA256: ${{ inputs.server_sha256 }}
+          SERVER_PROVENANCE_SHA256: ${{ inputs.server_provenance_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Tag publication stays blocked until real release pins are committed.
+          [[ "$SERVER_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SERVER_PROVENANCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+
       - name: Build and push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -136,6 +153,8 @@ jobs:
             UPSTREAM_TAG=${{ steps.meta.outputs.upstream_tag }}
             WEB_TAG=${{ steps.meta.outputs.web_tag }}
             WEB_SHA256=${{ steps.web.outputs.sha256 }}
+            SERVER_SHA256=${{ inputs.server_sha256 }}
+            SERVER_PROVENANCE_SHA256=${{ inputs.server_provenance_sha256 }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max

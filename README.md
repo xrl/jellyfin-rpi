@@ -36,7 +36,11 @@ Manual workflow runs publish a uniquely named image and deliberately do not move
 
 ## Local build
 
-The candidate defaults pin the server source commit, .NET 10 SDK index and compiled API checksum in `Dockerfile`. The build fetches that exact commit (no branch fallback), compiles ordinary AnyCPU IL on `BUILDPLATFORM`, and verifies the replacement checksum. The same IL assembly is used for both final architectures. To change the server patch, rebuild from the new immutable commit with the pinned SDK, validate assembly references and endpoint/media execution, then update both source and checksum pins; do not replace additional dependencies piecemeal.
+The server repository owns compilation and public GitHub Release assets. This consumer never clones or compiles foreign source. It downloads `Jellyfin.Api.dll` and `Jellyfin.Api.provenance.json` anonymously from `xrl/jellyfin` release `v12.1-rpi.1`, bound to source `a7c89ff23f07961c10ebc8a5ada9e998f98f8a73`. The same audited ordinary AnyCPU IL assembly serves both image architectures.
+
+Publication of these assets is pending server workflow review/merge and dispatch. Until actual release bytes are reviewed, `SERVER_SHA256` and `SERVER_PROVENANCE_SHA256` are required build inputs with no guessed defaults. The Dockerfile checks both hashes and the producer's canonical, indented provenance fields (source/tag/base/SDK/AnyCPU identity); it does not trust a mutable downloaded checksum as the sole pin. It retains the verified manifest as server metadata. Existing tag-triggered image publication fails until real server pins are committed; manual publication also requires reviewed pins and separate authority. The existing SDK compile stage has been removed.
+
+The tagged source retains the known denied-audio HTTP500 behavior; asset publication is not production readiness. Never overwrite an existing DLL release or reuse a feature-commit checksum for merged/tagged source. New patch bytes require a new reviewed source release and consumer pins.
 
 The official pinned index and both platform children are verified directly, independently of mutable upstream tag movement. Native architecture media validation and real-device playback acceptance remain required before publication/deployment.
 
@@ -45,12 +49,16 @@ For the existing matching web release:
 ```sh
 WEB_TAG=v12.1-xrl.1
 WEB_SHA256=d07c1121f42beb81efa96e46a00fe309ac9cbc9ea4f415fe9f399f23a6af500e
+: "${SERVER_SHA256:?Set the reviewed DLL release checksum}"
+: "${SERVER_PROVENANCE_SHA256:?Set the reviewed provenance release checksum}"
 docker buildx build \
   --platform linux/arm64 \
   --build-arg "WEB_TAG=$WEB_TAG" \
   --build-arg "WEB_SHA256=$WEB_SHA256" \
+  --build-arg "SERVER_SHA256=$SERVER_SHA256" \
+  --build-arg "SERVER_PROVENANCE_SHA256=$SERVER_PROVENANCE_SHA256" \
   --load \
   -t jellyfin-rpi:12.1-candidate .
 ```
 
-The Dockerfile pins the official upstream **12.1** multi-platform base digest and checks the supplied web asset checksum. This branch has not published or deployed an image. The overlay changes only the API assembly plus the existing patched-web installation and metadata. Source, SDK, base, web and compiled DLL identities are recorded in image labels. Builds fail on an unexpected compiled DLL checksum rather than silently accepting restore/compiler drift.
+The Dockerfile pins the official upstream **12.1** multi-platform base digest and checks the supplied web asset checksum. This branch has not published or deployed an image. The overlay changes only the API assembly plus the existing patched-web installation and metadata. Source, SDK, base, web and compiled DLL identities are recorded in image labels. Builds fail on missing or unexpected release-asset checksums and incompatible provenance. No SDK or source build cache is involved in the consumer path.
