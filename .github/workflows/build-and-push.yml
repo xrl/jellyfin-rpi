@@ -81,17 +81,23 @@ jobs:
             echo "web_tag=$WEB_TAG"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Verify pinned official base and ARM64 manifest
+      - name: Verify pinned official index and platform manifests
         shell: bash
         run: |
           set -euo pipefail
-          BASE_TAG='jellyfin/jellyfin:12.1'
           BASE_INDEX='78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e'
           BASE_ARM64='sha256:690b2dcb8f18f144d1091d728208a36e90cbf84a8811c9275b1e3bd96d52944f'
-          RAW=$(docker buildx imagetools inspect --raw "$BASE_TAG")
+          BASE_AMD64='sha256:326be1010b16c92e492f6c7dd6fd105943db84ce723c73183279a1ab357b8f9b'
+          RAW=$(docker buildx imagetools inspect --raw "jellyfin/jellyfin@sha256:$BASE_INDEX")
           [ "$(printf '%s' "$RAW" | sha256sum | cut -d' ' -f1)" = "$BASE_INDEX" ]
           printf '%s' "$RAW" | jq -e --arg digest "$BASE_ARM64" \
             '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64" and .digest == $digest)] | length == 1' > /dev/null
+          printf '%s' "$RAW" | jq -e --arg digest "$BASE_AMD64" \
+            '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64" and .digest == $digest)] | length == 1' > /dev/null
+          for CHILD in "$BASE_ARM64" "$BASE_AMD64"; do
+            CHILD_RAW=$(docker buildx imagetools inspect --raw "jellyfin/jellyfin@$CHILD")
+            [ "sha256:$(printf '%s' "$CHILD_RAW" | sha256sum | cut -d' ' -f1)" = "$CHILD" ]
+          done
 
       - name: Resolve web bundle checksum
         id: web
