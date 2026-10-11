@@ -9,7 +9,7 @@ SCRATCH=$(mktemp -d)
 IMAGE=dekopon-native-aac:${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}
 BUILDER=dekopon-native-aac-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}
 SERVER=dekopon-native-aac-server
-BUILDKIT=moby/buildkit@sha256:3ad6bb9bc8c78c0069d03247adb9a59b3b43d68e55353e876e558b888c6c1768
+BUILDKIT=moby/buildkit@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
 # The only published test artifacts are allowlisted results, stream probes and error bodies.
 ARTIFACTS="${RUNNER_TEMP:-/tmp}/native-aac-results"
 mkdir -p "$ARTIFACTS" "$SCRATCH/media" "$SCRATCH/config" "$SCRATCH/cache"
@@ -21,7 +21,7 @@ cleanup() {
   done
   docker rm -f "$SERVER" "$BUILDER" >/dev/null 2>&1 || true
   docker buildx rm "$BUILDER" >/dev/null 2>&1 || true
-  docker image rm "$IMAGE" >/dev/null 2>&1 || true
+  docker image rm "$IMAGE" "$BUILDKIT" >/dev/null 2>&1 || true
   # Only this task's labelled BuildKit cache volume; never prune the shared builder.
   docker volume rm "$BUILDER-cache" >/dev/null 2>&1 || true
   rm -rf "$SCRATCH"
@@ -31,7 +31,7 @@ trap cleanup EXIT
 
 # Dedicated BuildKit container and volume carry explicit campaign labels.
 docker volume create --label campaign=dekopon --name "$BUILDER-cache" >/dev/null
-docker run -d --privileged --network host --label campaign=dekopon --name "$BUILDER" \
+docker run -d --platform linux/amd64 --privileged --network host --label campaign=dekopon --name "$BUILDER" \
   -v "$BUILDER-cache:/var/lib/buildkit" "$BUILDKIT" --addr tcp://127.0.0.1:12349 >/dev/null
 docker buildx create --driver remote --name "$BUILDER" tcp://127.0.0.1:12349 >/dev/null
 for attempt in $(seq 1 30); do
