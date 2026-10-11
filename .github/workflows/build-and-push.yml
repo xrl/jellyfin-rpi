@@ -22,10 +22,17 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
+  native-amd64:
+    uses: ./.github/workflows/native-amd64.yml
+    permissions:
+      contents: read
   build:
+    needs: native-amd64
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

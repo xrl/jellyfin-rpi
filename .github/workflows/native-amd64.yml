@@ -1,0 +1,26 @@
+name: native-amd64
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build and exercise native amd64 image
+        shell: bash
+        run: tests/native-amd64.sh
+      - name: Upload sanitized probe evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-amd64-results
+          path: ${{ runner.temp }}/native-aac-results/
+          if-no-files-found: warn

@@ -27,7 +27,7 @@ The earlier MKV-progressive experiment is not included because it had no runtime
 1. Port and test the patches on the matching upstream `jellyfin-web` release.
 2. Tag that fork, for example `v10.11.11-xrl.2`. Its release workflow publishes `jellyfin-web-dist.tar.gz` and a SHA-256 file.
 3. Verify the pinned official 12.1 index and both platform manifests, the public server release DLL and provenance, and the existing `v12.1-xrl.1` web release/checksum.
-4. Only after exact-head build/asset checks, native architecture gates, and separate publication approval, dispatch the manual workflow from this reviewed branch. It publishes only `ghcr.io/xrl/jellyfin-rpi:12.1-manual-<run-id>-<run-attempt>` (distinct even on reruns). No image is published merely by pushing a tag: tag-triggered publication and `latest` are deliberately disabled for this candidate to prevent collisions with the existing 10.11 release path. Do not reuse a manual run's image tag.
+4. Only after exact-head build/asset checks, a passing PR native-amd64 media gate, other required native architecture gates, and separate publication approval, dispatch the manual workflow from this reviewed branch. It publishes only `ghcr.io/xrl/jellyfin-rpi:12.1-manual-<run-id>-<run-attempt>` (distinct even on reruns). No image is published merely by pushing a tag: tag-triggered publication and `latest` are deliberately disabled for this candidate to prevent collisions with the existing 10.11 release path. Do not reuse a manual run's image tag.
 5. Independently rehearse backup/restore, migration and browser acceptance before any explicitly approved single-writer deployment in `xrl/rpi-homelab`. Native LG C2 acceptance is deferred, not a cutover blocker; source checks do not imply TV validation.
 
 ## Local build
@@ -52,3 +52,7 @@ docker buildx build \
 ```
 
 The Dockerfile pins the official upstream **12.1** multi-platform base digest and checks the supplied web asset checksum. This branch has not published or deployed an image. The overlay changes only the API assembly plus the existing patched-web installation and metadata. Source, SDK, base, web and compiled DLL identities are recorded in image labels. Builds fail on unexpected release-asset checksums and incompatible provenance. No SDK or source build cache is involved in the consumer path.
+
+## Image integration gate
+
+`.github/workflows/native-amd64.yml` builds this exact Dockerfile on a native x86_64 GitHub-hosted runner, uses the inherited FFmpeg to create synthetic EAC3/AAC/mixed-track fixtures, and exercises 18 image-composition endpoint controls including progressive/HLS AAC stereo, video-copy logs, exact forbidden response, and non-iOS controls. It runs on pull requests and is also a prerequisite within the manual image publication workflow; no check by itself authorizes publication. It uses loopback-only access and isolated temporary config/cache/media. Only sanitized pass/fail results, FFprobe streams and the forbidden error body are uploaded; access-token-bearing negotiations and server logs stay local and are deleted. The dedicated labelled BuildKit container, volume, candidate image and scratch server are removed after each job; no shared Docker cache is pruned. ARM64 native media evidence and native device acceptance remain separate.
