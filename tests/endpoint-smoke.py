@@ -18,7 +18,8 @@ def check(name, condition, detail=None):
     (E/'endpoint-results.json').write_text(json.dumps(results,indent=2))
     assert condition, name
 
-if not req('/System/Info/Public')['StartupWizardCompleted']:
+public_info=req('/System/Info/Public')
+if not public_info.get('StartupWizardCompleted', public_info.get('startupWizardCompleted')):
     req('/Startup/Configuration','POST',{'UICulture':'en-US','MetadataCountryCode':'US','PreferredMetadataLanguage':'en'})
     req('/Startup/User')
     req('/Startup/User','POST',{'Name':'scratch','Password':'scratch-isolated-only'})

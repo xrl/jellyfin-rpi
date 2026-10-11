@@ -24,7 +24,7 @@ cleanup() {
   docker image rm "$IMAGE" "$BUILDKIT" >/dev/null 2>&1 || true
   # Only this task's labelled BuildKit cache volume; never prune the shared builder.
   docker volume rm "$BUILDER-cache" >/dev/null 2>&1 || true
-  rm -rf "$SCRATCH"
+  sudo rm -rf "$SCRATCH"
   exit "$status"
 }
 trap cleanup EXIT
