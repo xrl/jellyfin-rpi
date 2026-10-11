@@ -13,10 +13,11 @@ BUILDKIT=moby/buildkit@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd9175
 # The only published test artifacts are allowlisted results, stream probes and error bodies.
 ARTIFACTS="${RUNNER_TEMP:-/tmp}/native-aac-results"
 mkdir -p "$ARTIFACTS" "$SCRATCH/media" "$SCRATCH/config" "$SCRATCH/cache"
+printf 'runner=%s docker=%s\n' "$(uname -m)" "$(docker info --format '{{.Architecture}}')" > "$SCRATCH/native-architecture.txt"
 cleanup() {
   status=$?
   if [ -f "$SCRATCH/endpoint-results.json" ]; then cp "$SCRATCH/endpoint-results.json" "$ARTIFACTS/"; fi
-  for f in progressive-probe.json hls-probe.json video-denied-probe.json http-error-403.txt; do
+  for f in failure.json native-architecture.txt progressive-probe.json hls-probe.json video-denied-probe.json http-error-403.txt; do
     if [ -f "$SCRATCH/$f" ]; then cp "$SCRATCH/$f" "$ARTIFACTS/"; fi
   done
   docker rm -f "$SERVER" "$BUILDER" >/dev/null 2>&1 || true

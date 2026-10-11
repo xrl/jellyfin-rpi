@@ -9,7 +9,15 @@ def req(path, method='GET', body=None, token=None, client='Jellyfin iOS'):
     headers={'Authorization':f'MediaBrowser Client="{client}", Device="isolated-test", DeviceId="{client}", Version="1.8.0"'}
     if token: headers['Authorization'] += f', Token="{token}"'
     if body is not None: headers['Content-Type']='application/json'
-    r=urllib.request.urlopen(urllib.request.Request(BASE+urllib.parse.quote(path,safe='/?&=,%:+'), data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method),timeout=90)
+    try:
+        r=urllib.request.urlopen(urllib.request.Request(BASE+urllib.parse.quote(path,safe='/?&=,%:+'), data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method),timeout=90)
+    except urllib.error.HTTPError as error:
+        # Never persist the query, request body, headers, response body or generated media URL.
+        failure={'category':'request_http_error','method':method,'path':urllib.parse.urlsplit(path).path,'status':error.code}
+        (E/'failure.json').write_text(json.dumps(failure,indent=2))
+        print(f'HTTP failure: {method} {failure["path"]} status={error.code}', file=sys.stderr)
+        raise
+
     data=r.read()
     return json.loads(data) if data and 'json' in r.headers.get('Content-Type','') else data
 
