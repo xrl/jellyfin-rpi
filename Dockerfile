@@ -4,12 +4,11 @@
 ARG UPSTREAM_BASE=docker.io/jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e
 ARG UPSTREAM_TAG=12.1
 ARG WEB_TAG=v12.1-xrl.1
-ARG WEB_SHA256
-ARG SERVER_TAG=v12.1-rpi.1
-ARG SERVER_SOURCE_COMMIT=a7c89ff23f07961c10ebc8a5ada9e998f98f8a73
-# Required reviewed release-asset pins until the real workflow output is published.
-ARG SERVER_SHA256
-ARG SERVER_PROVENANCE_SHA256
+ARG WEB_SHA256=d07c1121f42beb81efa96e46a00fe309ac9cbc9ea4f415fe9f399f23a6af500e
+ARG SERVER_TAG=v12.1-rpi.2
+ARG SERVER_SOURCE_COMMIT=19432f27fa3af78c4045550c2cc21ef169f15420
+ARG SERVER_SHA256=ec256cfaf1a72819c71566963862319bb261da5a1c555b87e22d82abb1d0b1e4
+ARG SERVER_PROVENANCE_SHA256=d64d873396ac90fd9320341d8ac7ff06fb9ba5808fbcf7a84d572f7e2a4dbc70
 
 FROM ${UPSTREAM_BASE}
 
@@ -40,10 +39,12 @@ USER root
 
 RUN set -eux; \
     test "${UPSTREAM_BASE}" = 'docker.io/jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e'; \
-    test "${SERVER_TAG}" = 'v12.1-rpi.1'; \
-    test "${SERVER_SOURCE_COMMIT}" = 'a7c89ff23f07961c10ebc8a5ada9e998f98f8a73'; \
-    printf '%s\n' "${SERVER_SHA256}" | grep -Eq '^[0-9a-f]{64}$'; \
-    printf '%s\n' "${SERVER_PROVENANCE_SHA256}" | grep -Eq '^[0-9a-f]{64}$'; \
+    test "${SERVER_TAG}" = 'v12.1-rpi.2'; \
+    test "${SERVER_SOURCE_COMMIT}" = '19432f27fa3af78c4045550c2cc21ef169f15420'; \
+    test "${WEB_TAG}" = 'v12.1-xrl.1'; \
+    test "${WEB_SHA256}" = 'd07c1121f42beb81efa96e46a00fe309ac9cbc9ea4f415fe9f399f23a6af500e'; \
+    test "${SERVER_SHA256}" = 'ec256cfaf1a72819c71566963862319bb261da5a1c555b87e22d82abb1d0b1e4'; \
+    test "${SERVER_PROVENANCE_SHA256}" = 'd64d873396ac90fd9320341d8ac7ff06fb9ba5808fbcf7a84d572f7e2a4dbc70'; \
     curl --retry 5 --retry-all-errors -fsSL \
       "https://github.com/xrl/jellyfin/releases/download/${SERVER_TAG}/Jellyfin.Api.dll" \
       -o /tmp/Jellyfin.Api.dll; \

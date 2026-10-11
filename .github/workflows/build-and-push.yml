@@ -1,9 +1,6 @@
 name: build-and-push
 
 on:
-  push:
-    tags:
-      - 'v*-xrl.*'
   workflow_dispatch:
     inputs:
       upstream_tag:
@@ -15,10 +12,12 @@ on:
         default: 'v12.1-xrl.1'
         required: true
       server_sha256:
-        description: 'Reviewed v12.1-rpi.1 Jellyfin.Api.dll release SHA256 (no default until published)'
+        description: 'Reviewed v12.1-rpi.2 Jellyfin.Api.dll release SHA256'
+        default: 'ec256cfaf1a72819c71566963862319bb261da5a1c555b87e22d82abb1d0b1e4'
         required: true
       server_provenance_sha256:
-        description: 'Reviewed v12.1-rpi.1 Jellyfin.Api.provenance.json SHA256'
+        description: 'Reviewed v12.1-rpi.2 Jellyfin.Api.provenance.json SHA256'
+        default: 'd64d873396ac90fd9320341d8ac7ff06fb9ba5808fbcf7a84d572f7e2a4dbc70'
         required: true
 
 permissions:
@@ -54,17 +53,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "$EVENT_NAME" = "push" ]; then
-            RELEASE_TAG="${GITHUB_REF_NAME#v}"
-            UPSTREAM_TAG="${RELEASE_TAG%%-xrl.*}"
-            WEB_TAG="$GITHUB_REF_NAME"
-            IMAGE_TAGS="ghcr.io/xrl/jellyfin-rpi:${RELEASE_TAG}"$'\n''ghcr.io/xrl/jellyfin-rpi:latest'
-          else
-            UPSTREAM_TAG="$INPUT_UPSTREAM_TAG"
-            WEB_TAG="$INPUT_WEB_TAG"
-            RELEASE_TAG="${UPSTREAM_TAG}-manual-${GITHUB_RUN_ID}"
-            IMAGE_TAGS="ghcr.io/xrl/jellyfin-rpi:${RELEASE_TAG}"
-          fi
+          [ "$EVENT_NAME" = 'workflow_dispatch' ] || { echo 'Tag publication is disabled for this recipe' >&2; exit 1; }
+          UPSTREAM_TAG="$INPUT_UPSTREAM_TAG"
+          WEB_TAG="$INPUT_WEB_TAG"
+          RELEASE_TAG="${UPSTREAM_TAG}-manual-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          IMAGE_TAGS="ghcr.io/xrl/jellyfin-rpi:${RELEASE_TAG}"
 
           # Official upstream tags include 12.1 (not 12.1.0); retain older three-part tags.
           if ! [[ "$UPSTREAM_TAG" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
@@ -73,8 +66,8 @@ jobs:
           fi
           # This release branch pins the verified official 12.1 index; do not
           # silently build another version against that base.
-          if [ "$UPSTREAM_TAG" != '12.1' ] || ! [[ "$WEB_TAG" =~ ^v12\.1-xrl\.[0-9]+$ ]]; then
-            echo "This recipe requires official 12.1 and a v12.1-xrl.N web release" >&2
+          if [ "$UPSTREAM_TAG" != '12.1' ] || [ "$WEB_TAG" != 'v12.1-xrl.1' ]; then
+            echo "This recipe requires official 12.1 and the pinned v12.1-xrl.1 web release" >&2
             exit 1
           fi
 
@@ -119,6 +112,7 @@ jobs:
             echo "Invalid checksum release asset for $WEB_TAG" >&2
             exit 1
           fi
+          [ "$WEB_SHA256" = 'd07c1121f42beb81efa96e46a00fe309ac9cbc9ea4f415fe9f399f23a6af500e' ]
           echo "sha256=$WEB_SHA256" >> "$GITHUB_OUTPUT"
 
       - name: Require reviewed server release pins
@@ -128,9 +122,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Tag publication stays blocked until real release pins are committed.
-          [[ "$SERVER_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$SERVER_PROVENANCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [ "$SERVER_SHA256" = 'ec256cfaf1a72819c71566963862319bb261da5a1c555b87e22d82abb1d0b1e4' ]
+          [ "$SERVER_PROVENANCE_SHA256" = 'd64d873396ac90fd9320341d8ac7ff06fb9ba5808fbcf7a84d572f7e2a4dbc70' ]
 
       - name: Build and push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0

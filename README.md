@@ -26,21 +26,15 @@ The earlier MKV-progressive experiment is not included because it had no runtime
 
 1. Port and test the patches on the matching upstream `jellyfin-web` release.
 2. Tag that fork, for example `v10.11.11-xrl.2`. Its release workflow publishes `jellyfin-web-dist.tar.gz` and a SHA-256 file.
-3. Verify the matching official server index and ARM64 child digests and pin the base. Supply the verified matching web release asset checksum as a build argument; the 12.1 Dockerfile deliberately has no checksum default.
-4. Only after exact-head build/asset checks and separate publication approval, tag this repository with the same version. Tag builds derive the server and web versions from the tag and publish:
-   - `ghcr.io/xrl/jellyfin-rpi:<version>`
-   - `ghcr.io/xrl/jellyfin-rpi:latest`
+3. Verify the pinned official 12.1 index and both platform manifests, the public server release DLL and provenance, and the existing `v12.1-xrl.1` web release/checksum.
+4. Only after exact-head build/asset checks, native architecture gates, and separate publication approval, dispatch the manual workflow from this reviewed branch. It publishes only `ghcr.io/xrl/jellyfin-rpi:12.1-manual-<run-id>-<run-attempt>` (distinct even on reruns). No image is published merely by pushing a tag: tag-triggered publication and `latest` are deliberately disabled for this candidate to prevent collisions with the existing 10.11 release path. Do not reuse a manual run's image tag.
 5. Independently rehearse backup/restore, migration and browser acceptance before any explicitly approved single-writer deployment in `xrl/rpi-homelab`. Native LG C2 acceptance is deferred, not a cutover blocker; source checks do not imply TV validation.
-
-Manual workflow runs publish a uniquely named image and deliberately do not move `latest`.
 
 ## Local build
 
-The server repository owns compilation and public GitHub Release assets. This consumer never clones or compiles foreign source. It downloads `Jellyfin.Api.dll` and `Jellyfin.Api.provenance.json` anonymously from `xrl/jellyfin` release `v12.1-rpi.1`, bound to source `a7c89ff23f07961c10ebc8a5ada9e998f98f8a73`. The same audited ordinary AnyCPU IL assembly serves both image architectures.
+The server repository owns compilation and public GitHub Release assets. This consumer never clones or compiles foreign source. It downloads `Jellyfin.Api.dll` (SHA-256 `ec256cfaf1a72819c71566963862319bb261da5a1c555b87e22d82abb1d0b1e4`) and `Jellyfin.Api.provenance.json` (SHA-256 `d64d873396ac90fd9320341d8ac7ff06fb9ba5808fbcf7a84d572f7e2a4dbc70`) anonymously from `xrl/jellyfin` release `v12.1-rpi.2`, bound to source `19432f27fa3af78c4045550c2cc21ef169f15420`. The same audited ordinary AnyCPU IL assembly serves both image architectures.
 
-Publication of these assets is pending server workflow review/merge and dispatch. Until actual release bytes are reviewed, `SERVER_SHA256` and `SERVER_PROVENANCE_SHA256` are required build inputs with no guessed defaults. The Dockerfile checks both hashes and the producer's canonical, indented provenance fields (source/tag/base/SDK/AnyCPU identity); it does not trust a mutable downloaded checksum as the sole pin. It retains the verified manifest as server metadata. Existing tag-triggered image publication fails until real server pins are committed; manual publication also requires reviewed pins and separate authority. The existing SDK compile stage has been removed.
-
-The tagged source retains the known denied-audio HTTP500 behavior; asset publication is not production readiness. Never overwrite an existing DLL release or reuse a feature-commit checksum for merged/tagged source. New patch bytes require a new reviewed source release and consumer pins.
+The Dockerfile defaults and assertions pin both public assets and the existing web release SHA-256. Manual workflow checksum inputs default to those reviewed values; supplying other values fails before publication (and image build checks the downloaded bytes). The Dockerfile checks both hashes and the producer's canonical, indented provenance fields (source/tag/base/SDK/AnyCPU identity); it does not trust a mutable downloaded checksum as the sole pin. It retains the verified manifest as server metadata. The existing SDK compile stage has been removed. No image publication or deployment is implied by these pins.
 
 The official pinned index and both platform children are verified directly, independently of mutable upstream tag movement. Native architecture media validation and real-device playback acceptance remain required before publication/deployment.
 
@@ -49,16 +43,12 @@ For the existing matching web release:
 ```sh
 WEB_TAG=v12.1-xrl.1
 WEB_SHA256=d07c1121f42beb81efa96e46a00fe309ac9cbc9ea4f415fe9f399f23a6af500e
-: "${SERVER_SHA256:?Set the reviewed DLL release checksum}"
-: "${SERVER_PROVENANCE_SHA256:?Set the reviewed provenance release checksum}"
 docker buildx build \
   --platform linux/arm64 \
   --build-arg "WEB_TAG=$WEB_TAG" \
   --build-arg "WEB_SHA256=$WEB_SHA256" \
-  --build-arg "SERVER_SHA256=$SERVER_SHA256" \
-  --build-arg "SERVER_PROVENANCE_SHA256=$SERVER_PROVENANCE_SHA256" \
   --load \
   -t jellyfin-rpi:12.1-candidate .
 ```
 
-The Dockerfile pins the official upstream **12.1** multi-platform base digest and checks the supplied web asset checksum. This branch has not published or deployed an image. The overlay changes only the API assembly plus the existing patched-web installation and metadata. Source, SDK, base, web and compiled DLL identities are recorded in image labels. Builds fail on missing or unexpected release-asset checksums and incompatible provenance. No SDK or source build cache is involved in the consumer path.
+The Dockerfile pins the official upstream **12.1** multi-platform base digest and checks the supplied web asset checksum. This branch has not published or deployed an image. The overlay changes only the API assembly plus the existing patched-web installation and metadata. Source, SDK, base, web and compiled DLL identities are recorded in image labels. Builds fail on unexpected release-asset checksums and incompatible provenance. No SDK or source build cache is involved in the consumer path.
