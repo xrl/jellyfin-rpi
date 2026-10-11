@@ -17,7 +17,8 @@ printf 'runner=%s docker=%s\n' "$(uname -m)" "$(docker info --format '{{.Archite
 cleanup() {
   status=$?
   if [ -f "$SCRATCH/endpoint-results.json" ]; then cp "$SCRATCH/endpoint-results.json" "$ARTIFACTS/"; fi
-  for f in failure.json native-architecture.txt progressive-probe.json hls-probe.json video-denied-probe.json http-error-403.txt; do
+  if [ "$status" -ne 0 ] && [ -f "$SCRATCH/failure.json" ]; then cp "$SCRATCH/failure.json" "$ARTIFACTS/"; fi
+  for f in native-architecture.txt progressive-probe.json hls-probe.json video-denied-probe.json http-error-403.txt; do
     if [ -f "$SCRATCH/$f" ]; then cp "$SCRATCH/$f" "$ARTIFACTS/"; fi
   done
   docker rm -f "$SERVER" "$BUILDER" >/dev/null 2>&1 || true
@@ -60,7 +61,8 @@ docker run -d --label campaign=dekopon --name "$SERVER" --platform linux/amd64 \
   -v "$SCRATCH/media:/media:ro" "$IMAGE" >/dev/null
 ready=0
 for attempt in $(seq 1 90); do
-  if curl -fsS http://127.0.0.1:18096/System/Info/Public >/dev/null 2>&1; then ready=1; break; fi
+  # SetupServer serves Public info before full API routes exist; probe the actual startup controller.
+  if curl -fsS http://127.0.0.1:18096/Startup/Configuration >/dev/null 2>&1; then ready=1; break; fi
   if [ "$(docker inspect "$SERVER" --format '{{.State.Running}}')" != true ]; then break; fi
   sleep 2
 done
