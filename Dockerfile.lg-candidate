@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1.7
+
+ARG UPSTREAM_BASE=docker.io/jellyfin/jellyfin:12.3@sha256:2038fe038ab3876a80f6e7b7e0aef6607b032c7dc0c9b3ad3296d0b2eba3bbb5
+FROM ${UPSTREAM_BASE}
+
+ARG UPSTREAM_BASE
+ARG WEB_TAG=unpublished-v12.3-xrl.1-candidate
+ARG WEB_SHA256
+ARG WEB_SOURCE_COMMIT
+ARG WEB_NODE_VERSION
+ARG WEB_LOCK_SHA256
+
+LABEL campaign="dekopon" \
+      org.opencontainers.image.source="https://github.com/xrl/jellyfin-rpi" \
+      org.opencontainers.image.version="12.3-xrl.1-candidate" \
+      org.opencontainers.image.description="Stock Jellyfin 12.3 server with the XRL LG webOS web bundle; no API DLL overlay" \
+      org.opencontainers.image.base.name="${UPSTREAM_BASE}" \
+      io.xrl.jellyfin.base-arm64-manifest="sha256:2fe4523231dee34a7144d6fcd0313a60730c25695fa4e9f6ae09f98d4dbe9370" \
+      io.xrl.jellyfin.base-amd64-manifest="sha256:720ad28968e040f1ea049749f4ce546b28c7251244a6eb8aacf9147d8afbc24d" \
+      io.xrl.jellyfin.upstream-tag="12.3" \
+      io.xrl.jellyfin.web-tag="${WEB_TAG}" \
+      io.xrl.jellyfin.web-sha256="${WEB_SHA256}" \
+      io.xrl.jellyfin.web-source-commit="${WEB_SOURCE_COMMIT}" \
+      io.xrl.jellyfin.web-node-version="${WEB_NODE_VERSION}" \
+      io.xrl.jellyfin.web-lock-sha256="${WEB_LOCK_SHA256}"
+
+USER root
+
+# Supply a source-owner-built artifact directory with --build-context web-asset=DIR.
+# Published and local artifacts use this same checksum-verifying consumer path.
+COPY --from=web-asset /jellyfin-web-dist.tar.gz /tmp/jellyfin-web-dist.tar.gz
+RUN set -eux; \
+    test "${UPSTREAM_BASE}" = 'docker.io/jellyfin/jellyfin:12.3@sha256:2038fe038ab3876a80f6e7b7e0aef6607b032c7dc0c9b3ad3296d0b2eba3bbb5'; \
+    case "${WEB_TAG}" in unpublished-v12.3-xrl.1-candidate|v12.3-xrl.1) ;; *) exit 1 ;; esac; \
+    test "${#WEB_SHA256}" -eq 64; \
+    test "${#WEB_SOURCE_COMMIT}" -eq 40; \
+    test "${#WEB_LOCK_SHA256}" -eq 64; \
+    test -n "${WEB_NODE_VERSION}"; \
+    echo "${WEB_SHA256}  /tmp/jellyfin-web-dist.tar.gz" | sha256sum -c -; \
+    rm -rf /jellyfin/jellyfin-web; \
+    mkdir -p /jellyfin/jellyfin-web; \
+    tar -xzf /tmp/jellyfin-web-dist.tar.gz -C /jellyfin/jellyfin-web; \
+    test -s /jellyfin/jellyfin-web/index.html; \
+    rm /tmp/jellyfin-web-dist.tar.gz; \
+    printf '%s\n' '12.3' > /jellyfin/jellyfin-web/.xrl-server-tag; \
+    printf '%s\n' "${WEB_TAG}" > /jellyfin/jellyfin-web/.xrl-web-tag
