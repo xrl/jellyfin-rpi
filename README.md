@@ -55,17 +55,22 @@ Run only one gate at a time: its loopback ports are 12359 and 18097. The results
 path must be shared with the Docker VM (for example under the user's home on
 Colima), because it also holds the temporary bind-mounted scratch directory.
 
-This candidate is not wired into existing publication CI while its web asset is
-unpublished. Source PRs/builds do not publish release tags, release assets,
-registry images or `latest`. A future release is named `12.3-xrl.1`, not
-`12.1-xrl.2`, and needs separate publication approval.
+The manual `Publish LG 12.3-xrl.1` workflow publishes from reviewed `main` only,
+using an independently verified web-release SHA-256 and an explicit
+`confirm_fail_forward=true` acknowledgment. It verifies the web tag's exact
+source commit, refuses an existing image tag, publishes ARM64/amd64 with
+provenance/SBOM, and never updates `latest`. Existing 12.1 publication and media
+workflows are unchanged. Source PRs/pushes do not publish anything automatically.
 
-**Production cutover remains blocked on real LG C2 acceptance:** Paddington cold
-start, resume/seek and sustained playback, a DV Profile 8 title and H.264/DTS
-playback. Synthetic fragments and desktop playback cannot satisfy that gate.
-Database migration plus backup/restore must also be rehearsed on isolated state
-before using the candidate with a copy of the current library. No old server may
-open a database migrated by the candidate. No deployment is authorized here.
+**Normal acceptance requires the real LG C2:** Paddington cold start, resume/seek
+and sustained playback, a DV Profile 8 title and H.264/DTS playback. Synthetic
+fragments and desktop playback cannot satisfy that gate. An owner may explicitly
+accept fail-forward publication/deployment and validate after rollout; record that
+exception rather than calling the failed synthetic gate or C2 acceptance passed.
+Keep a fresh consistent non-media state backup before deployment and use a
+single-writer rollout. Without a completed migration/restore rehearsal, record
+that remaining risk explicitly. No old server may open a migrated database.
+These build instructions do not themselves authorize a production deployment.
 
 ## Current release
 
