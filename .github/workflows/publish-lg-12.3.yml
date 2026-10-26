@@ -94,4 +94,4 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          printf 'Image: `%s@%s`\n\nStreaming/C2 acceptance is unverified; owner approved fail-forward.\n' "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Image: %s@%s\n\nStreaming/C2 acceptance is unverified; owner approved fail-forward.\n' "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
