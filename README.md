@@ -2,6 +2,67 @@
 
 A multi-architecture Jellyfin image that replaces the web bundle in the official `jellyfin/jellyfin` server image with the tested LG webOS playback bundle from [`xrl/jellyfin-web`](https://github.com/xrl/jellyfin-web). The 12.1 candidate also replaces only `Jellyfin.Api.dll` with the XRL iOS video AAC policy patch. The official self-contained runtime, remaining server assemblies, FFmpeg, OS and entrypoint are retained.
 
+## LG 12.3 candidate (local-only)
+
+`Dockerfile.lg-candidate` is an additive **12.3-xrl.1 candidate** recipe. It uses
+stock official 12.3 server assemblies and a matching, patched 12.3 web artifact.
+It does **not** install the 12.1-only iOS API DLL overlay in `Dockerfile`; that
+existing recipe and its native-amd64 gates are unchanged. Production's earlier
+12.1 image did not contain that overlay either. Adopting the iOS policy on 12.3
+requires a separately rebuilt and reviewed server artifact.
+
+The candidate pins the official 12.3 multi-platform index to
+`sha256:2038fe038ab3876a80f6e7b7e0aef6607b032c7dc0c9b3ad3296d0b2eba3bbb5`
+(ARM64 child `sha256:2fe4523231dee34a7144d6fcd0313a60730c25695fa4e9f6ae09f98d4dbe9370`,
+amd64 child `sha256:720ad28968e040f1ea049749f4ce546b28c7251244a6eb8aacf9147d8afbc24d`).
+It includes upstream fixes #18186 (remux segment cleanup) and #18300 (Profile 8
+HEVC `hvc1` tag). The latter deliberately does not change Profile 7, so it is
+**not a demonstrated Paddington fix**. Existing LG DTS, HDR fallback, fMP4 and
+bounded recovery changes live in the web source repository.
+
+Build and check the web bundle in `xrl/jellyfin-web` first, using that repository's
+Node version, lockfile, tests, typecheck, production build, ES5 check and
+`scripts/assert-lg-bundle.cjs`. Archive the **contents** of `dist/` at the tar root
+as `jellyfin-web-dist.tar.gz` in an artifact directory outside either checkout.
+Record the source commit, Node version, lockfile SHA-256 and archive SHA-256.
+This repository never clones or compiles the web or server sources. Both a local
+archive and a later downloaded release archive use the same named-context and
+checksum-verification path; no second installation recipe is needed.
+
+From this repository, with those independently recorded inputs:
+
+```sh
+export WEB_ASSET_DIR=/absolute/path/to/web-artifact-directory
+export WEB_SHA256=<reviewed-archive-sha256>
+export WEB_SOURCE_COMMIT=<reviewed-40-character-web-commit>
+export WEB_NODE_VERSION=<producer-node-version>
+export WEB_LOCK_SHA256=<producer-lockfile-sha256>
+export LG_CANDIDATE_RESULTS=/absolute/path/to/scratch-results
+bash tests/lg-candidate.sh
+```
+
+The local gate uses a dedicated labelled BuildKit container/cache and the Docker
+host's native architecture. It rejects an incorrect archive checksum, builds
+this exact recipe, checks provenance labels, starts a fresh loopback-only server
+and exercises synthetic H.264/HEVC video-copy plus six-channel AAC conversion
+through real fMP4 HLS fragments, with compatible AAC as a direct-play control.
+It retains sanitized results/runtime identity and removes its containers,
+candidate image, private builder cache and scratch configuration on exit. It
+never mounts production config/media, publishes an image or modifies Kubernetes.
+Run only one gate at a time: its loopback ports are 12359 and 18097.
+
+This candidate is not wired into existing publication CI while its web asset is
+unpublished. Source PRs/builds do not publish release tags, release assets,
+registry images or `latest`. A future release is named `12.3-xrl.1`, not
+`12.1-xrl.2`, and needs separate publication approval.
+
+**Production cutover remains blocked on real LG C2 acceptance:** Paddington cold
+start, resume/seek and sustained playback, a DV Profile 8 title and H.264/DTS
+playback. Synthetic fragments and desktop playback cannot satisfy that gate.
+Database migration plus backup/restore must also be rehearsed on isolated state
+before using the candidate with a copy of the current library. No old server may
+open a database migrated by the candidate. No deployment is authorized here.
+
 ## Current release
 
 `ghcr.io/xrl/jellyfin-rpi:10.11.11-xrl.2` combines:
