@@ -4,6 +4,7 @@ ARG UPSTREAM_BASE=docker.io/jellyfin/jellyfin:12.3@sha256:2038fe038ab3876a80f6e7
 FROM ${UPSTREAM_BASE}
 
 ARG UPSTREAM_BASE
+ARG WEB_TAG=unpublished-v12.3-xrl.1-candidate
 ARG WEB_SHA256
 ARG WEB_SOURCE_COMMIT
 ARG WEB_NODE_VERSION
@@ -17,7 +18,7 @@ LABEL campaign="dekopon" \
       io.xrl.jellyfin.base-arm64-manifest="sha256:2fe4523231dee34a7144d6fcd0313a60730c25695fa4e9f6ae09f98d4dbe9370" \
       io.xrl.jellyfin.base-amd64-manifest="sha256:720ad28968e040f1ea049749f4ce546b28c7251244a6eb8aacf9147d8afbc24d" \
       io.xrl.jellyfin.upstream-tag="12.3" \
-      io.xrl.jellyfin.web-tag="v12.3-xrl.1" \
+      io.xrl.jellyfin.web-tag="${WEB_TAG}" \
       io.xrl.jellyfin.web-sha256="${WEB_SHA256}" \
       io.xrl.jellyfin.web-source-commit="${WEB_SOURCE_COMMIT}" \
       io.xrl.jellyfin.web-node-version="${WEB_NODE_VERSION}" \
@@ -30,6 +31,7 @@ USER root
 COPY --from=web-asset /jellyfin-web-dist.tar.gz /tmp/jellyfin-web-dist.tar.gz
 RUN set -eux; \
     test "${UPSTREAM_BASE}" = 'docker.io/jellyfin/jellyfin:12.3@sha256:2038fe038ab3876a80f6e7b7e0aef6607b032c7dc0c9b3ad3296d0b2eba3bbb5'; \
+    case "${WEB_TAG}" in unpublished-v12.3-xrl.1-candidate|v12.3-xrl.1) ;; *) exit 1 ;; esac; \
     test "${#WEB_SHA256}" -eq 64; \
     test "${#WEB_SOURCE_COMMIT}" -eq 40; \
     test "${#WEB_LOCK_SHA256}" -eq 64; \
@@ -41,4 +43,4 @@ RUN set -eux; \
     test -s /jellyfin/jellyfin-web/index.html; \
     rm /tmp/jellyfin-web-dist.tar.gz; \
     printf '%s\n' '12.3' > /jellyfin/jellyfin-web/.xrl-server-tag; \
-    printf '%s\n' 'v12.3-xrl.1' > /jellyfin/jellyfin-web/.xrl-web-tag
+    printf '%s\n' "${WEB_TAG}" > /jellyfin/jellyfin-web/.xrl-web-tag

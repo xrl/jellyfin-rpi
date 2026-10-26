@@ -11,7 +11,11 @@ cd "$(dirname "$0")/.."
 
 ARCH=$(docker info --format '{{.Architecture}}')
 case "$ARCH" in aarch64|arm64) PLATFORM=linux/arm64;; x86_64|amd64) PLATFORM=linux/amd64;; *) exit 1;; esac
-SCRATCH=$(mktemp -d)
+# macOS's default /var/folders temp tree is not necessarily shared into Colima.
+case "$LG_CANDIDATE_RESULTS" in /*) ;; *) echo 'Results path must be absolute' >&2; exit 1;; esac
+mkdir -p "$LG_CANDIDATE_RESULTS"
+SCRATCH=$(mktemp -d "$LG_CANDIDATE_RESULTS/scratch.XXXXXX")
+export WEB_TAG="${WEB_TAG:-unpublished-v12.3-xrl.1-candidate}"
 RUN_ID="$(date -u +%Y%m%d%H%M%S)-$$"
 IMAGE="jellyfin-lg-candidate:12.3-$RUN_ID"
 BUILDER="jellyfin-123-builder-$RUN_ID"
@@ -24,14 +28,19 @@ cleanup() {
   status=$?
   trap - EXIT
   set +e
-  for file in endpoint-results.json h264-probe.json hevc-probe.json runtime.txt image-labels.json; do
+  for file in endpoint-results.json scan-summary.json h264-probe.json hevc-probe.json runtime.txt image-labels.json; do
     if [ -f "$SCRATCH/$file" ]; then cp "$SCRATCH/$file" "$LG_CANDIDATE_RESULTS/"; fi
   done
   docker rm -f "$SERVER" "$FIXTURE" "$PROBE_NAME" "$BUILDER" >/dev/null 2>&1
   docker buildx rm "$BUILDER" >/dev/null 2>&1
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    # Linux containers can leave root-owned config; clean only this run's bind mount.
+    docker run --rm --label campaign=dekopon --name "$BUILDER-cleaner" -v "$SCRATCH:/scratch" \
+      --entrypoint /bin/sh "$IMAGE" -c 'rm -rf /scratch/* /scratch/.[!.]* /scratch/..?*' || status=1
+  fi
   docker image rm "$IMAGE" >/dev/null 2>&1
   docker volume rm "$BUILDER-cache" >/dev/null 2>&1
-  rm -rf "$SCRATCH"
+  if ! rm -rf "$SCRATCH"; then echo "Scratch cleanup failed: $SCRATCH" >&2; status=1; fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -50,7 +59,7 @@ done
 build() {
   docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --label campaign=dekopon \
     -f Dockerfile.lg-candidate --build-context "web-asset=$WEB_ASSET_DIR" \
-    --build-arg "WEB_SHA256=$1" --build-arg "WEB_SOURCE_COMMIT=$WEB_SOURCE_COMMIT" \
+    --build-arg "WEB_TAG=$WEB_TAG" --build-arg "WEB_SHA256=$1" --build-arg "WEB_SOURCE_COMMIT=$WEB_SOURCE_COMMIT" \
     --build-arg "WEB_NODE_VERSION=$WEB_NODE_VERSION" --build-arg "WEB_LOCK_SHA256=$WEB_LOCK_SHA256" \
     --load -t "$IMAGE" .
 }
@@ -68,6 +77,7 @@ labels = json.loads((pathlib.Path(os.environ['SMOKE_DIR']) / 'image-labels.json'
 for key, value in [('web-sha256','WEB_SHA256'), ('web-source-commit','WEB_SOURCE_COMMIT'), ('web-node-version','WEB_NODE_VERSION'), ('web-lock-sha256','WEB_LOCK_SHA256')]:
     assert labels['io.xrl.jellyfin.' + key] == os.environ[value]
 assert labels['io.xrl.jellyfin.upstream-tag'] == '12.3'
+assert labels['io.xrl.jellyfin.web-tag'] == os.environ['WEB_TAG']
 PY
 
 docker run --rm --label campaign=dekopon --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg "$IMAGE" -version > "$SCRATCH/runtime.txt"
@@ -76,11 +86,13 @@ ffmpeg() {
   docker run --rm --label campaign=dekopon --name "$FIXTURE" -v "$SCRATCH/media:/media" \
     --entrypoint /usr/lib/jellyfin-ffmpeg/ffmpeg "$IMAGE" -hide_banner -loglevel error -y "$@"
 }
+# Codec-only filenames can be discarded by media-name parsing. Use movie folders.
+mkdir -p "$SCRATCH/media/SyntheticAlpha" "$SCRATCH/media/SyntheticBravo" "$SCRATCH/media/SyntheticCharlie"
 ffmpeg -f lavfi -i testsrc2=size=320x180:rate=24 -f lavfi -i anullsrc=r=48000:cl=5.1 \
-  -t 8 -c:v libx264 -preset ultrafast -g 48 -pix_fmt yuv420p -c:a eac3 -b:a 448k /media/h264.mkv
-ffmpeg -i /media/h264.mkv -c:v libx265 -preset ultrafast -x265-params pools=1:frame-threads=1:log-level=error \
-  -pix_fmt yuv420p -c:a copy /media/hevc.mkv
-ffmpeg -i /media/h264.mkv -c:v copy -c:a aac -ac 2 /media/aac.mkv
+  -t 8 -c:v libx264 -preset ultrafast -g 48 -pix_fmt yuv420p -c:a eac3 -b:a 448k /media/SyntheticAlpha/SyntheticAlpha.mkv
+ffmpeg -i /media/SyntheticAlpha/SyntheticAlpha.mkv -c:v libx265 -preset ultrafast -x265-params pools=1:frame-threads=1:log-level=error \
+  -pix_fmt yuv420p -c:a copy /media/SyntheticBravo/SyntheticBravo.mkv
+ffmpeg -i /media/SyntheticAlpha/SyntheticAlpha.mkv -c:v copy -c:a aac -ac 2 /media/SyntheticCharlie/SyntheticCharlie.mkv
 
 docker run -d --label campaign=dekopon --name "$SERVER" --platform "$PLATFORM" \
   -p 127.0.0.1:18097:8096 -v "$SCRATCH/config:/config" -v "$SCRATCH/cache:/cache" \
@@ -96,8 +108,8 @@ python3 tests/lg-candidate-smoke.py
 # Actual commands, not only successful negotiations, must copy video and convert audio.
 docker logs "$SERVER" > "$SCRATCH/server.log" 2>&1
 grep -E -- '-codec:v:0 copy.*-codec:a:0 libfdk_aac -ac 6' "$SCRATCH/server.log" > "$SCRATCH/copy-commands.txt"
-for fixture in h264 hevc; do
-  grep -F "/media/$fixture.mkv" "$SCRATCH/copy-commands.txt" > "$SCRATCH/fixture-command.txt"
+for fixture in SyntheticAlpha SyntheticBravo; do
+  grep -F "/media/$fixture/$fixture.mkv" "$SCRATCH/copy-commands.txt" > "$SCRATCH/fixture-command.txt"
   grep -q -- '-f hls' "$SCRATCH/fixture-command.txt"
 done
 echo 'Candidate image/checksum/native synthetic gates passed. LG C2 and migration gates remain untested.'

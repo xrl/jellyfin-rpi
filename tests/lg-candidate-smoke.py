@@ -72,8 +72,11 @@ def run():
         if len(items) == 3 and all(i.get("MediaSources") for i in items):
             break
         time.sleep(2)
+    # Keep only synthetic names/counts, never negotiations or token-bearing URLs.
+    (ROOT / "scan-summary.json").write_text(json.dumps({"count": len(items), "names": [i["Name"] for i in items]}, indent=2))
     check("three synthetic fixtures scanned", len(items) == 3 and all(i.get("MediaSources") for i in items))
-    items = {pathlib.Path(i["MediaSources"][0]["Path"]).stem: i for i in items}
+    fixture_names = {"SyntheticAlpha": "h264", "SyntheticBravo": "hevc", "SyntheticCharlie": "aac"}
+    items = {fixture_names[pathlib.Path(i["MediaSources"][0]["Path"]).stem]: i for i in items}
     profile = {
         "MaxStreamingBitrate": 200000000,
         "DirectPlayProfiles": [{"Type": "Video", "Container": "mkv,mp4", "VideoCodec": "h264,hevc", "AudioCodec": "aac"}],

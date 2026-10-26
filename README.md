@@ -27,7 +27,9 @@ as `jellyfin-web-dist.tar.gz` in an artifact directory outside either checkout.
 Record the source commit, Node version, lockfile SHA-256 and archive SHA-256.
 This repository never clones or compiles the web or server sources. Both a local
 archive and a later downloaded release archive use the same named-context and
-checksum-verification path; no second installation recipe is needed.
+checksum-verification path; no second installation recipe is needed. Local images
+are labelled `unpublished-v12.3-xrl.1-candidate`; only after a release exists may
+`WEB_TAG=v12.3-xrl.1` identify a published artifact.
 
 From this repository, with those independently recorded inputs:
 
@@ -49,7 +51,9 @@ through real fMP4 HLS fragments, with compatible AAC as a direct-play control.
 It retains sanitized results/runtime identity and removes its containers,
 candidate image, private builder cache and scratch configuration on exit. It
 never mounts production config/media, publishes an image or modifies Kubernetes.
-Run only one gate at a time: its loopback ports are 12359 and 18097.
+Run only one gate at a time: its loopback ports are 12359 and 18097. The results
+path must be shared with the Docker VM (for example under the user's home on
+Colima), because it also holds the temporary bind-mounted scratch directory.
 
 This candidate is not wired into existing publication CI while its web asset is
 unpublished. Source PRs/builds do not publish release tags, release assets,
