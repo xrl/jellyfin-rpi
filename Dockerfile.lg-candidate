@@ -31,7 +31,7 @@ USER root
 COPY --from=web-asset /jellyfin-web-dist.tar.gz /tmp/jellyfin-web-dist.tar.gz
 RUN set -eux; \
     test "${UPSTREAM_BASE}" = 'docker.io/jellyfin/jellyfin:12.3@sha256:2038fe038ab3876a80f6e7b7e0aef6607b032c7dc0c9b3ad3296d0b2eba3bbb5'; \
-    case "${WEB_TAG}" in unpublished-v12.3-xrl.1-candidate|v12.3-xrl.1) ;; *) exit 1 ;; esac; \
+    case "${WEB_TAG}" in unpublished-v12.3-xrl.1-candidate|v12.3-xrl.1|unpublished-v12.3-xrl.2-candidate|v12.3-xrl.2) ;; *) exit 1 ;; esac; \
     test "${#WEB_SHA256}" -eq 64; \
     test "${#WEB_SOURCE_COMMIT}" -eq 40; \
     test "${#WEB_LOCK_SHA256}" -eq 64; \
