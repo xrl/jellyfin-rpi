@@ -55,14 +55,14 @@ Run only one gate at a time: its loopback ports are 12359 and 18097. The results
 path must be shared with the Docker VM (for example under the user's home on
 Colima), because it also holds the temporary bind-mounted scratch directory.
 
-The manual `Publish LG 12.3-xrl.1` workflow publishes from reviewed `main` only,
-using an independently verified web-release SHA-256 and an explicit
-`confirm_fail_forward=true` acknowledgment. It verifies the web tag's exact
-source commit, refuses an existing image tag, publishes ARM64/amd64 with
-provenance/SBOM, and never updates `latest`. Existing 12.1 publication and media
-workflows are unchanged. Source PRs/pushes do not publish anything automatically.
+The manual `Publish a Jellyfin 12.3 web update` workflow packages later Web
+releases against the same pinned 12.3 server. Dispatch it from reviewed `main`
+with the published `v12.3-xrl.N` web tag, its exact commit, and the independently
+verified archive SHA-256. It records the Web release's Node version and lockfile
+checksum, refuses an existing image tag, and publishes ARM64/amd64 with
+provenance and an SBOM. Source PRs and pushes never publish the image.
 
-**Normal acceptance requires the real LG C2:** Paddington cold start, resume/seek
+**Acceptance of the 12.3 playback upgrade requires the real LG C2:** Paddington cold start, resume/seek
 and sustained playback, a DV Profile 8 title and H.264/DTS playback. Synthetic
 fragments and desktop playback cannot satisfy that gate. An owner may explicitly
 accept fail-forward publication/deployment and validate after rollout; record that

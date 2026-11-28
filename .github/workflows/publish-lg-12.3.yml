@@ -1,16 +1,23 @@
-name: Publish LG 12.3-xrl.1
+name: Publish a Jellyfin 12.3 web update
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_fail_forward:
-        description: Accept unverified synthetic streaming and validate on the C2 after deployment
+      web_tag:
+        description: Published Jellyfin Web tag (v12.3-xrl.N)
         required: true
-        default: false
-        type: boolean
+        type: string
+      web_sha256:
+        description: Verified SHA-256 of jellyfin-web-dist.tar.gz
+        required: true
+        type: string
+      web_source_commit:
+        description: Reviewed commit referenced by the web release tag
+        required: true
+        type: string
 
 concurrency:
-  group: publish-lg-12.3-xrl.1
+  group: publish-jellyfin-web-12.3
   cancel-in-progress: false
 
 permissions:
@@ -23,22 +30,18 @@ jobs:
       contents: read
       packages: write
     env:
-      WEB_TAG: v12.3-xrl.1
-      WEB_SHA256: 2f57929ea98803cce140eb253e8b93d630e0064ee21aac5cbccbfa5809057e5a
-      WEB_SOURCE_COMMIT: 41789c3e6f8176d605168f3e975e806961676244
-      WEB_NODE_VERSION: v24.22.1
-      WEB_LOCK_SHA256: 491d60a49385f31d481e9d55559e4ecb397a9110e0407e91453c91d77de9e160
-      IMAGE: ghcr.io/xrl/jellyfin-rpi:12.3-xrl.1
+      WEB_TAG: ${{ inputs.web_tag }}
+      WEB_SHA256: ${{ inputs.web_sha256 }}
+      WEB_SOURCE_COMMIT: ${{ inputs.web_source_commit }}
     steps:
-      - name: Require explicit fail-forward publication on main
-        env:
-          CONFIRM: ${{ inputs.confirm_fail_forward }}
+      - name: Validate reviewed publication inputs
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
-          test "$CONFIRM" = true
+          [[ "$WEB_TAG" =~ ^v12\.3-xrl\.[1-9][0-9]*$ ]]
           [[ "$WEB_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          echo '::warning::Synthetic streaming and actual LG C2 acceptance have NOT passed. This is an explicit fail-forward publication.'
+          [[ "$WEB_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          printf 'IMAGE_VERSION=%s\nIMAGE=ghcr.io/xrl/jellyfin-rpi:%s\n' "${WEB_TAG#v}" "${WEB_TAG#v}" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Fetch only the source-owned pinned web release
         env:
@@ -51,6 +54,13 @@ jobs:
             "https://github.com/xrl/jellyfin-web/releases/download/$WEB_TAG/jellyfin-web-dist.tar.gz" \
             -o web-asset/jellyfin-web-dist.tar.gz
           printf '%s  %s\n' "$WEB_SHA256" web-asset/jellyfin-web-dist.tar.gz | sha256sum -c -
+          read_source_file() {
+            gh api -H 'Accept: application/vnd.github.raw+json' "repos/xrl/jellyfin-web/contents/$1?ref=$WEB_SOURCE_COMMIT"
+          }
+          node_version=$(read_source_file .nvmrc)
+          [[ "$node_version" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          lock_sha=$(read_source_file package-lock.json | sha256sum | cut -d' ' -f1)
+          printf 'WEB_NODE_VERSION=v%s\nWEB_LOCK_SHA256=%s\n' "${node_version#v}" "$lock_sha" >> "$GITHUB_ENV"
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
@@ -77,10 +87,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           pull: true
           push: true
-          tags: ghcr.io/xrl/jellyfin-rpi:12.3-xrl.1
+          tags: ${{ env.IMAGE }}
           labels: |
             campaign=dekopon
-            org.opencontainers.image.version=12.3-xrl.1
+            org.opencontainers.image.version=${{ env.IMAGE_VERSION }}
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: |
             WEB_TAG=${{ env.WEB_TAG }}
@@ -94,4 +104,4 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          printf 'Image: %s@%s\n\nStreaming/C2 acceptance is unverified; owner approved fail-forward.\n' "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Image: %s@%s\n\nWeb source: %s at %s\n' "$IMAGE" "$IMAGE_DIGEST" "$WEB_TAG" "$WEB_SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"
